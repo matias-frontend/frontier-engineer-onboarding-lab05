@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: production-rag
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      # The handout's gemini-2.0-flash is shut down; 2.5-flash is closed to new keys.
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      - key: PINECONE_NAMESPACE
+        value: lab05
+      - key: EMBEDDING_DIM
+        value: "384"
+    # No disk needed: Pinecone holds the vectors and BM25 rebuilds from Pinecone
+    # metadata on boot, so the free tier's ephemeral filesystem costs nothing.
+    #
+    # NOTE: the rate limiter and semantic cache are per-process, in-memory state.
+    # They do not survive a restart and do not coordinate across replicas. Fine
+    # for a single free-tier instance; a multi-instance deployment needs Redis.
+    # See docs/DEVIATIONS.md.

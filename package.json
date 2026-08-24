@@ -1,0 +1,31 @@
+{
+  "name": "production-rag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Production RAG: hybrid retrieval, cited generation, evaluation, rate limiting, semantic caching, and observability.",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc --noEmit",
+    "smoke:local": "tsx scripts/smoke-local.ts",
+    "smoke:e2e": "tsx scripts/smoke-e2e.ts",
+    "evaluate": "tsx scripts/evaluate.ts",
+    "tune:cache": "tsx scripts/tune-cache.ts",
+    "ab:chunking": "tsx scripts/ab-chunking.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^2.18.0",
+    "@hono/node-server": "^2.1.1",
+    "@pinecone-database/pinecone": "^8.2.0",
+    "hono": "^4.13.4",
+    "tsx": "^4.23.12"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
+  }
+}

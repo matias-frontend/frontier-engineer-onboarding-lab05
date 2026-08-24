@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+
+# Generated evaluation reports. Local artifacts — in CI these belong in an
+# artifact store, or commit a single deliberate baseline for regression diffs.
+eval-results/
+eval.log
