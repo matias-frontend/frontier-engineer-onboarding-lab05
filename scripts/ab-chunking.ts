@@ -55,6 +55,10 @@ const K = 5;
 interface VariantScore {
     variant: string;
     chunks: number;
+    /** P@K over DISTINCT documents — the cross-strategy comparable figure. */
+    precisionDistinct: number;
+    /** How many distinct documents the top K actually contained. */
+    avgDistinctDocs: number;
     precision: number;
     mrr: number;
     recall: number;
@@ -87,6 +91,7 @@ for (const variant of VARIANTS) {
     await guarded(() => rehydrateBm25());
 
     const perQuery: VariantScore['perQuery'] = [];
+    const perQueryDeduped: Array<{ precision: number; mrr: number }> = [];
     for (const testCase of GOLDEN_SET) {
         // Skip the deliberately unanswerable case: it has no relevant docs, so
         // retrieval metrics are undefined for it.
@@ -102,12 +107,29 @@ for (const variant of VARIANTS) {
             mrr: meanReciprocalRank(retrieved, relevant),
             retrieved
         });
+
+        // Chunk-level P@K is NOT comparable across chunking strategies: a
+        // strategy that splits one document into three chunks can fill three of
+        // the top five slots with that single document, inflating precision
+        // without retrieving anything more relevant. Deduplicating to distinct
+        // documents first is what makes the two variants measurable against
+        // each other.
+        const seen = new Set<string>();
+        const distinct = retrieved.filter(id => (seen.has(id) ? false : (seen.add(id), true)));
+        perQueryDeduped.push({
+            precision: precisionAtK(distinct, relevant, K),
+            mrr: meanReciprocalRank(distinct, relevant)
+        });
     }
 
     const mean = (xs: number[]) => (xs.length === 0 ? 0 : xs.reduce((a, b) => a + b, 0) / xs.length);
     const score: VariantScore = {
         variant: variant.name,
         chunks: chunkCount,
+        precisionDistinct: mean(perQueryDeduped.map(q => q.precision)),
+        avgDistinctDocs: mean(
+            perQuery.map(q => new Set(q.retrieved.slice(0, K)).size)
+        ),
         precision: mean(perQuery.map(q => q.precision)),
         mrr: mean(perQuery.map(q => q.mrr)),
         recall: mean(
@@ -119,17 +141,25 @@ for (const variant of VARIANTS) {
     };
     results.push(score);
 
-    console.log(`   P@${K}=${score.precision.toFixed(4)}  MRR=${score.mrr.toFixed(4)}  recall=${score.recall.toFixed(4)}`);
+    console.log(
+        `   P@${K}(chunk)=${score.precision.toFixed(4)}  P@${K}(distinct docs)=${score.precisionDistinct.toFixed(4)}  ` +
+            `MRR=${score.mrr.toFixed(4)}  recall=${score.recall.toFixed(4)}  avg distinct docs in top ${K}: ${score.avgDistinctDocs.toFixed(1)}`
+    );
 }
 
 console.log('\n\n=== comparison ===\n');
-console.log('   variant   chunks   P@5      MRR      recall');
+console.log('   variant   chunks   P@5-chunk   P@5-distinct   MRR      recall   distinct/5');
 for (const score of results) {
     console.log(
         `   ${score.variant.padEnd(9)} ${String(score.chunks).padStart(5)}   ` +
-            `${score.precision.toFixed(4)}   ${score.mrr.toFixed(4)}   ${score.recall.toFixed(4)}`
+            `${score.precision.toFixed(4)}      ${score.precisionDistinct.toFixed(4)}       ` +
+            `${score.mrr.toFixed(4)}   ${score.recall.toFixed(4)}   ${score.avgDistinctDocs.toFixed(1)}`
     );
 }
+
+console.log('\n   Read P@5-distinct, not P@5-chunk. Chunk-level precision rewards a');
+console.log('   strategy for splitting one document across several top-K slots, which');
+console.log('   is not the same as retrieving more relevant material.');
 
 const [small, large] = results;
 if (small && large) {

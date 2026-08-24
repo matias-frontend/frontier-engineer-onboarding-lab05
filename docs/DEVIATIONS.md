@@ -175,3 +175,46 @@ Consequences, recorded honestly:
   cheaply than regenerating — a fast model asked "are these the same question?"
   costs far less than a full RAG turn. Not built here; noted as the obvious
   next step.
+
+## 10. Measured: chunk-level Precision@K is not comparable across chunking strategies
+
+The A/B chunking run produced a result that looked decisive and was actually an
+artifact. Recording it because the trap is easy to fall into and the fix is
+small.
+
+First run, 12 documents, top-5 retrieval:
+
+| variant | chunks | P@5 | MRR | recall@5 |
+| --- | --- | --- | --- | --- |
+| small (300 chars) | 32 | 0.4727 | 0.9091 | 0.9242 |
+| large (800 chars) | 12 | 0.2727 | 0.9091 | 0.9697 |
+
+Small chunks appear to win on precision by a wide margin. They do not.
+
+**Large chunks produced exactly one chunk per document.** With one chunk per
+document, a query having a single relevant document can fill at most 1 of 5
+slots, so P@5 is *capped at 0.20* by construction. Small chunks split each
+document into two or three pieces that all share a `doc_id`, so the same
+document occupies several slots and precision rises — without a single
+additional relevant document being retrieved.
+
+Chunk-level P@K therefore rewards fragmentation, not relevance. The script now
+reports **P@K over distinct documents** alongside it, which is the figure that
+compares across strategies, plus the average number of distinct documents in the
+top K so the effect is visible rather than inferred.
+
+Two findings from that run survive the correction:
+
+- **MRR is identical (0.9091).** The first relevant document lands at the same
+  rank under both strategies, so ranking quality at the top is genuinely
+  unchanged by chunk size on this corpus.
+- **Recall favours large chunks (0.9697 vs 0.9242), and this one is real.**
+  With small chunks, duplicate fragments of one document crowd the top K and
+  push *other* relevant documents out. That penalty lands specifically on
+  multi-document queries — precisely the ones where recall matters most.
+
+The practical implication is the opposite of the naive reading: on a corpus of
+short documents, smaller chunks bought no ranking improvement and cost recall.
+The general lesson is that a metric can be individually correct and still
+meaningless in a comparison, if the thing being varied changes the denominator's
+meaning.
