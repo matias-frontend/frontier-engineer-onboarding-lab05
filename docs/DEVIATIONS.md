@@ -203,7 +203,30 @@ reports **P@K over distinct documents** alongside it, which is the figure that
 compares across strategies, plus the average number of distinct documents in the
 top K so the effect is visible rather than inferred.
 
-Two findings from that run survive the correction:
+### Corrected measurement
+
+Re-running with both figures confirmed the artifact and **reversed the
+conclusion**:
+
+| variant | chunks | P@5 (chunk) | P@5 (distinct) | MRR | recall@5 | distinct docs in top 5 |
+| --- | --- | --- | --- | --- | --- | --- |
+| small (300) | 32 | 0.4727 | **0.2182** | 0.9091 | 0.9242 | **3.1** |
+| large (800) | 12 | 0.2727 | **0.2364** | 0.9091 | 0.9697 | **4.8** |
+
+The apparent 0.47 vs 0.27 advantage for small chunks collapses to 0.218 vs
+0.236 once duplicates are removed — with large chunks slightly *ahead*, the
+opposite of the original reading.
+
+`distinct docs in top 5` is the mechanism, stated plainly: **3.1 versus 4.8**.
+Small chunks spend nearly two of every five retrieval slots on redundant
+fragments of a document already represented. That single fact explains both
+symptoms — the inflated chunk-level precision and the depressed recall are the
+same effect measured from two directions.
+
+On this corpus, larger chunks are equal or better on every metric that survives
+scrutiny.
+
+Two findings from the original run survive the correction:
 
 - **MRR is identical (0.9091).** The first relevant document lands at the same
   rank under both strategies, so ranking quality at the top is genuinely
@@ -215,6 +238,15 @@ Two findings from that run survive the correction:
 
 The practical implication is the opposite of the naive reading: on a corpus of
 short documents, smaller chunks bought no ranking improvement and cost recall.
-The general lesson is that a metric can be individually correct and still
-meaningless in a comparison, if the thing being varied changes the denominator's
-meaning.
+
+The general lesson is that **a metric can be individually correct and still
+meaningless in a comparison**. `precisionAtK` computes exactly what it claims.
+The problem was that varying chunk size changed what "5 retrieved items" *means*
+— five chunks drawn from five documents and five drawn from two are not the same
+measurement — so the denominator quietly stopped being comparable between the
+two arms.
+
+Caveat on scope: twelve short documents is a small corpus, and chunk size
+matters most when documents are long enough to split into genuinely distinct
+passages. What this run establishes is the measurement artifact and its
+mechanism, not a general rule about chunk size.
